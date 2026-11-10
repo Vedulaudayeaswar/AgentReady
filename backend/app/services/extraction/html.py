@@ -92,10 +92,28 @@ def find_price(region: Tag) -> tuple[str | None, str | None]:
     return None, None
 
 
+PRODUCT_SCOPE = re.compile(r"schema\.org/(Product|ProductModel|IndividualProduct)", re.I)
+
+
+def _product_heading(soup: BeautifulSoup) -> Tag | None:
+    """The element the page itself marks as the product name (itemprop="name" inside a Product scope).
+
+    Preferred over <h1>, which on many shops is a site banner ("Test Sites", "Our Store") rather than the
+    product name.
+    """
+    scope = soup.find(attrs={"itemscope": True, "itemtype": PRODUCT_SCOPE})
+    if scope is None:
+        return None
+    for el in scope.find_all(attrs={"itemprop": True}):
+        if "name" in el.get("itemprop", "").split() and el.find_parent(attrs={"itemscope": True}) is scope:
+            return el if clean_text(el.get_text(" ", strip=True)) else None
+    return None
+
+
 def heuristic_product(soup: BeautifulSoup, page_url: str, meta: dict[str, str]) -> ExtractedProduct | None:
     region = main_region(soup)
     p = ExtractedProduct(origin="html", source_url=page_url, product_url=page_url)
-    h1 = region.find("h1") or soup.find("h1")
+    h1 = _product_heading(soup) or region.find("h1") or soup.find("h1")
     name = clean_text(h1.get_text(" ", strip=True), 500) if h1 else None
     if name and (len(name) > 150 or find_price_strings(name)):
         # malformed markup (e.g. unclosed <h1>) swallowed following content: keep the heading's own text

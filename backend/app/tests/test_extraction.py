@@ -172,3 +172,13 @@ def test_duplicate_issues_are_capped_per_product():
                             product_url=None, source_url=None) for _ in range(40)]
     assert len(find_duplicates(same)) == 40 * 39 // 2  # every pair is a candidate ...
     assert validator.MAX_DUPLICATE_ISSUES_PER_PRODUCT == 5  # ... but revalidate_business keeps 5 per product
+
+
+def test_html_name_prefers_product_markup_over_site_banner_h1():
+    from app.services.extraction.html import heuristic_product
+
+    html = """<html><body><h1>Test Sites</h1><div itemscope itemtype="https://schema.org/Product">
+      <h4 class="title" itemprop="name">Asus VivoBook X441NA-GA190</h4><span class="price">$295.99</span>
+    </div></body></html>"""
+    p = heuristic_product(BeautifulSoup(html, "lxml"), "https://shop.example/product/60", {})
+    assert p is not None and p.name == "Asus VivoBook X441NA-GA190"
