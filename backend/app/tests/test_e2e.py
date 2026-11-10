@@ -242,3 +242,32 @@ async def test_mock_ai_is_labelled(client, site, settings):
                                       for e in detail["evidence"])
     ai = (await client.get(f"{API}/settings/ai", headers=h)).json()
     assert ai["is_mock"] is True and ai["usage"][0]["model"] == "mock-local"
+
+
+async def test_unchanged_rescan_clears_stale_extraction_warnings(client, site):
+    # A product's extraction warnings were computed by an older extractor; a rescan where nothing visible
+    # changed must still replace them (otherwise fixed false warnings stay open forever).
+    from sqlalchemy import select
+
+    from app.db.session import session_factory
+    from app.models import Product, ValidationIssue
+
+    h = await register(client)
+    website, scan = await connect_and_scan(client, h)
+    assert scan["status"] == "completed", scan["errors"]
+    stale = {"code": "conflicting_values", "field": "name", "message": "microdata and html disagree on name"}
+    async with session_factory()() as s:
+        for p in (await s.execute(select(Product))).scalars():
+            p.extra = {**(p.extra or {}), "flags": [stale]}
+        await s.commit()
+
+    r = await client.post(f"{API}/scans", json={"website_id": website["id"]}, headers=h)
+    await wait_for_inline_tasks()
+    rescan = (await client.get(f"{API}/scans/{r.json()['id']}", headers=h)).json()
+    assert rescan["status"] == "completed", rescan  # nothing changed: applied automatically
+    async with session_factory()() as s:
+        flags = [f for p in (await s.execute(select(Product))).scalars() for f in (p.extra or {}).get("flags", [])]
+        open_stale = (await s.execute(select(ValidationIssue).where(
+            ValidationIssue.code == "conflicting_values", ValidationIssue.status == "open",
+            ValidationIssue.message == stale["message"]))).scalars().all()
+    assert stale not in flags and open_stale == []

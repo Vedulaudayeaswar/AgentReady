@@ -333,6 +333,9 @@ async def apply_scan(session: AsyncSession, scan: ScanJob, snapshot_ids: set[uui
                 continue
             if s.change_type == "unchanged":
                 product.source_values = snapshot_fields(s.data or {})
+                # extraction warnings are machine-derived: refresh them so an improved extractor (or a fixed
+                # page) clears stale warnings even when no merchant-visible field changed
+                product.extra = {**(product.extra or {}), "flags": (s.data or {}).get("flags") or []}
             if s.change_type == "changed":
                 old_price, old_currency = product.price_amount, product.currency
                 skipped = write_product_fields(product, s.data or {})
