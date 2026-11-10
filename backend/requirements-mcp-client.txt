@@ -1,0 +1,4 @@
+# Official MCP Python SDK, used only by eval/mcp_client_check.py to verify the MCP server with a real client.
+# Install it in a SEPARATE virtualenv: mcp 2.x requires newer starlette/pydantic than the API pins.
+#   python -m venv .venv-mcp && .venv-mcp/Scripts/pip install -r requirements-mcp-client.txt
+mcp==2.3.0

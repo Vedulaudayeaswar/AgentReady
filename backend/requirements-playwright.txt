@@ -1,0 +1,3 @@
+# Optional: rendering of permitted JavaScript-heavy pages.
+# After installing run: python -m playwright install chromium
+playwright>=1.48

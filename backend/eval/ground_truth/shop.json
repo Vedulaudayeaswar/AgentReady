@@ -1,0 +1,29 @@
+{
+  "site": "shop",
+  "host": "shop.example",
+  "verified_by": "manual reading of app/tests/fixtures/shop/*.html",
+  "pages": {
+    "product": ["/products/dc-motor-12v", "/products/steel-bolt-m10", "/products/gear-pump",
+                "/products/heavy-motor", "/products/broken-page", "/products/promo-item"],
+    "listing": ["/price-list"],
+    "other": ["/", "/about", "/blog/new-arrivals", "/app"]
+  },
+  "products": [
+    {"name": "12V DC Motor", "sku": "MTR001", "brand": "VoltPro", "price": 450, "currency": "INR",
+     "availability": "InStock", "gtin": "4006381333931",
+     "attributes": {"voltage": ["12", "V"], "speed": ["3000", "RPM"]}},
+    {"name": "Steel Bolt M10", "sku": "BLT-M10", "brand": "FastenRight", "price": 25, "currency": "INR",
+     "availability": "InStock", "attributes": {"thread": ["M10", null], "length": ["50", "mm"]}},
+    {"name": "Gear Pump GP-200", "sku": "GP-200", "price": null, "currency": null, "availability": null},
+    {"name": "Heavy Duty Motor", "sku": "HDM-5", "price_conflict": true, "currency": "INR"},
+    {"name": "Copper Wire 2.5mm", "sku": "CW-25", "price": 1250, "currency": "INR", "availability": "OutOfStock"},
+    {"name": "Cable Ties (100 pcs)", "price": 99, "currency": "INR"},
+    {"name": "Motor A", "price": 450, "currency": "INR", "category": "DC Motors",
+     "attributes": {"voltage": ["12", "V"], "rpm": ["3000", null]}},
+    {"name": "Motor B", "price": 750, "currency": "INR", "category": "DC Motors",
+     "attributes": {"voltage": ["24", "V"], "rpm": ["5000", null]}},
+    {"name": "Relay R1", "price": 120, "currency": "INR", "requires_ai": true},
+    {"name": "Relay R2", "price": 180, "currency": "INR", "requires_ai": true}
+  ],
+  "duplicate_pairs": [["Steel Bolt M10", "Steel Bolt M10"]]
+}

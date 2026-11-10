@@ -1,0 +1,103 @@
+# AgentReady — local stack: PostgreSQL, Redis, API, Celery worker, Celery Beat (scheduler), web frontend.
+#   cp .env.example .env     # set SECRET_KEY (and GROQ_API_KEY for AI extraction)
+#   docker compose up -d --build
+# Web: http://localhost:8080   API docs: http://localhost:8000/docs   Health: http://localhost:8000/health
+# Production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d  (see DEPLOYMENT.md)
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://agentready:${POSTGRES_PASSWORD:-agentready}@postgres:5432/agentready
+  REDIS_URL: redis://redis:6379/0
+  JOB_BACKEND: celery
+  # dev-only overrides (e.g. walkthroughs against a local fixture shop); safe defaults
+  ALLOW_PRIVATE_NETWORKS: ${ALLOW_PRIVATE_NETWORKS:-false}
+  ALLOWED_PORTS: ${ALLOWED_PORTS:-80,443}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentready
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentready}
+      POSTGRES_DB: agentready
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentready"]
+      interval: 5s
+      retries: 10
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # append-only persistence: queued jobs survive a Redis restart
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      <<: *backend-env
+      FRONTEND_URL: http://localhost:8080
+      CORS_ORIGINS: http://localhost:8080
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+      # nginx overwrites X-Forwarded-For with the real client address; trust it for per-client rate limits
+      FORWARDED_ALLOW_IPS: "*"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["127.0.0.1:8000:8000"]
+
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    command: ["sh", "docker/start-worker.sh"]
+    env_file: .env
+    environment:
+      <<: *backend-env
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d worker@$$HOSTNAME --timeout 5 >/dev/null"]
+      interval: 30s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  # Exactly one Beat process: enqueues the scheduler tick (due rescans, price changes, feeds, intelligence,
+  # stuck-job recovery) every minute and the webhook tick every 10 s. Ticks are idempotent (work is claimed
+  # with conditional updates), so a duplicate tick never double-runs. Liveness: GET /health -> scheduler.
+  beat:
+    build: ./backend
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
+    env_file: .env
+    environment:
+      <<: *backend-env
+    healthcheck:
+      disable: true
+    depends_on:
+      redis: { condition: service_healthy }
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    ports: ["127.0.0.1:8080:80"]
+
+volumes:
+  pgdata:
+  redisdata:

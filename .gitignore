@@ -1,0 +1,22 @@
+# secrets
+.env
+backend/.env
+*.pem
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+backend/eval/results/
+# node
+node_modules/
+frontend/dist/
+# misc
+.DS_Store
+*.log
+
+# database backups (contain merchant data)
+backups/
+deploy/certs/
+*.tsbuildinfo

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://shop.example/products/dc-motor-12v</loc></url>
+  <url><loc>https://shop.example/products/steel-bolt-m10</loc></url>
+  <url><loc>https://shop.example/price-list</loc></url>
+  <url><loc>https://shop.example/private/secret-product</loc></url>
+</urlset>

@@ -1,0 +1,47 @@
+# Render Blueprint — free plan: one web service (API + frontend, inline jobs) + free PostgreSQL.
+# Render dashboard -> New -> Blueprint -> pick this repo. You are asked for GROQ_API_KEY (optional).
+databases:
+  - name: agentready-db
+    plan: free
+    databaseName: agentready
+    user: agentready
+
+services:
+  - type: web
+    name: agentready
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: agentready-db, property: connectionString }
+      - key: ENVIRONMENT
+        value: production
+      - key: JOB_BACKEND
+        value: inline
+      - key: ALLOW_INLINE_JOBS_IN_PRODUCTION
+        value: "true"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: LOG_FORMAT
+        value: json
+      - key: SECRET_KEY
+        generateValue: true
+      # Fernet key (base64, 32 bytes). Generate one and paste it at blueprint creation:
+      #   python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: groq
+      # keep scans small enough for a 512 MB free instance
+      - key: MAX_PAGES_PER_SCAN
+        value: "50"
+      - key: MAX_PRODUCTS_PER_SCAN
+        value: "250"
