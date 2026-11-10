@@ -182,3 +182,19 @@ def test_html_name_prefers_product_markup_over_site_banner_h1():
     </div></body></html>"""
     p = heuristic_product(BeautifulSoup(html, "lxml"), "https://shop.example/product/60", {})
     assert p is not None and p.name == "Asus VivoBook X441NA-GA190"
+
+
+def test_listing_card_and_product_page_merge_into_one_product():
+    from app.schemas.canonical import ExtractedProduct
+    from app.services.extraction.structured import parse_microdata
+    from app.services.normalization.product import dedupe_within_scan, finalize
+
+    card_html = """<div itemscope itemtype="https://schema.org/Product">
+      <a href="/shop/product/53" title="Asus ROG STRIX GL553VD" itemprop="name">Asus ROG...</a>
+      <span itemprop="price">$899.00</span><meta itemprop="priceCurrency" content="USD"></div>"""
+    card = parse_microdata(BeautifulSoup(card_html, "lxml"), "https://shop.example/laptops")[0]
+    assert card.product_url == "https://shop.example/shop/product/53"
+    page = ExtractedProduct(origin="microdata", source_url="https://shop.example/shop/product/53",
+                            product_url="https://shop.example/shop/product/53", name="Asus ROG STRIX GL553VD")
+    merged = dedupe_within_scan([finalize(card), finalize(page)])
+    assert len(merged) == 1

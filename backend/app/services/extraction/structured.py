@@ -281,6 +281,16 @@ def parse_microdata(soup: BeautifulSoup, page_url: str) -> list[ExtractedProduct
         if av:
             p.availability = av
             p.evidence.append(_ev("availability", av, av, page_url, frag, "microdata"))
+        # the product's own page: itemprop="url", else the link carrying the name (listing cards) — this is what
+        # lets a listing card and the product page it links to be recognised as the same product
+        url_el = _itemprop(scope, "url")
+        name_el = _itemprop(scope, "name")
+        link = _prop_value(url_el, "url") if url_el is not None else None
+        if not link and name_el is not None and name_el.name == "a" and name_el.get("href"):
+            link = name_el["href"]
+        if link and not link.startswith(("#", "javascript:")):
+            p.product_url = urljoin(page_url, link)
+            p.evidence.append(_ev("product_url", p.product_url, link, page_url, frag, "microdata"))
         img = _prop_value(_itemprop(scope, "image"), "image")
         if img:
             p.images = [ProductImage(url=urljoin(page_url, img))]
