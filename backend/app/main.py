@@ -97,7 +97,7 @@ async def well_known():
     return agents_v3.capability_document()
 
 
-@app.get("/health/live", tags=["meta"])
+@app.api_route("/health/live", methods=["GET", "HEAD"], tags=["meta"])
 async def health_live():
     """Liveness: the API process is running and serving requests (no dependency checks)."""
     return {"status": "ok"}
@@ -129,7 +129,8 @@ if s.static_dir:
         if (_static / "assets").is_dir():
             app.mount("/assets", StaticFiles(directory=_static / "assets"), name="assets")
 
-        @app.get("/{full_path:path}", include_in_schema=False)
+        # HEAD too: Render's port probe and uptime monitors send HEAD /
+        @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
         async def spa(full_path: str):
             if full_path.startswith(("api/", "health", "docs", ".well-known/")):
                 raise HTTPException(status_code=404)
