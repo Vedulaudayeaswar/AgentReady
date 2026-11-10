@@ -17,6 +17,8 @@ from app.schemas.canonical import AVAILABILITY_VALUES
 from app.services.deduplication.dedupe import find_duplicates
 from app.services.normalization.normalize import gtin_is_valid
 
+MAX_DUPLICATE_ISSUES_PER_PRODUCT = 5
+
 MEASUREMENT_KEYS = re.compile(r"(voltage|volt|current|power|watt|rpm|speed|weight|length|width|height|depth|diameter|"
                               r"capacity|torque|pressure|temperature|frequency)", re.I)
 
@@ -242,8 +244,12 @@ async def revalidate_business(session: AsyncSession, business_id: uuid.UUID, sca
     cat_cache = {c.id: c for c in (await session.execute(select(Category).where(Category.business_id == business_id))).scalars()} if definitions else {}
     dup_specs: dict[uuid.UUID, list[IssueSpec]] = {}
     names = {p.id: p.name for p in products}
-    for pair in find_duplicates(products):
+    # Strongest candidates first; each product keeps at most MAX_DUPLICATE_ISSUES_PER_PRODUCT so a systematic
+    # extraction problem (e.g. every name identical) cannot create a quadratic number of issues.
+    for pair in sorted(find_duplicates(products), key=lambda d: -d.score):
         for me, other in ((pair.a, pair.b), (pair.b, pair.a)):
+            if len(dup_specs.get(me, ())) >= MAX_DUPLICATE_ISSUES_PER_PRODUCT:
+                continue
             dup_specs.setdefault(me, []).append(IssueSpec(
                 "possible_duplicate", "warning", f"duplicate:{other}",
                 f"Possible duplicate of '{names.get(other) or other}' ({pair.reason})",

@@ -227,13 +227,31 @@ def _itemprop(scope: Tag, name: str) -> Tag | None:
     return None
 
 
-def _prop_value(el: Tag | None) -> str | None:
+# Properties whose value is a URL. For every other (text) property an <a href> or <img src> carrying the
+# itemprop is read as text: many shops put itemprop="name" on the product link, and the spec reading
+# (value = href) would turn every product name into a URL path.
+_URL_PROPS = {"image", "url", "availability", "itemCondition"}
+_TRUNCATED = ("...", "…")
+
+
+def _prop_value(el: Tag | None, prop: str | None = None) -> str | None:
     if el is None:
         return None
-    for attr in ("content", "href", "src", "value", "datetime"):
+    if el.get("content"):
+        return clean_text(el.get("content"))
+    if prop in _URL_PROPS:
+        for attr in ("href", "src", "value"):
+            if el.get(attr):
+                return clean_text(el.get(attr))
+        return clean_text(el.get_text(" ", strip=True))
+    for attr in ("value", "datetime"):
         if el.get(attr):
             return clean_text(el.get(attr))
-    return clean_text(el.get_text(" ", strip=True))
+    text = clean_text(el.get_text(" ", strip=True))
+    title = clean_text(el.get("title")) if el.get("title") else None
+    if title and (not text or (text.endswith(_TRUNCATED) and title.startswith(text.rstrip(".… ")))):
+        return title  # the visible text is a truncated version of the full name in title=
+    return text or title
 
 
 def parse_microdata(soup: BeautifulSoup, page_url: str) -> list[ExtractedProduct]:
@@ -242,28 +260,28 @@ def parse_microdata(soup: BeautifulSoup, page_url: str) -> list[ExtractedProduct
         frag = str(scope)[:1500]
         p = ExtractedProduct(origin="microdata", source_url=page_url)
         for field in ("name", "sku", "brand", "description", "mpn", "category", "material"):
-            val = _prop_value(_itemprop(scope, field))
+            val = _prop_value(_itemprop(scope, field), field)
             if val:
                 setattr(p, field, val[:5000] if field == "description" else val[:500])
                 p.evidence.append(_ev(field, val, val, page_url, frag, "microdata"))
         for gk in ("gtin13", "gtin12", "gtin14", "gtin8", "gtin"):
-            val = _prop_value(_itemprop(scope, gk))
+            val = _prop_value(_itemprop(scope, gk), gk)
             if val:
                 p.gtin = normalize_gtin(val)
                 p.evidence.append(_ev("gtin", p.gtin, val, page_url, frag, "microdata"))
                 break
-        price_raw = _prop_value(_itemprop(scope, "price"))
-        cur = _prop_value(_itemprop(scope, "priceCurrency"))
+        price_raw = _prop_value(_itemprop(scope, "price"), "price")
+        cur = _prop_value(_itemprop(scope, "priceCurrency"), "priceCurrency")
         if price_raw:
             price = parse_price(price_raw, cur)
             if price:
                 p.price = price
                 p.evidence.append(_ev("price", price.model_dump(mode="json"), f"{price_raw} {cur or ''}".strip(), page_url, frag, "microdata"))
-        av = normalize_availability(_prop_value(_itemprop(scope, "availability")))
+        av = normalize_availability(_prop_value(_itemprop(scope, "availability"), "availability"))
         if av:
             p.availability = av
             p.evidence.append(_ev("availability", av, av, page_url, frag, "microdata"))
-        img = _prop_value(_itemprop(scope, "image"))
+        img = _prop_value(_itemprop(scope, "image"), "image")
         if img:
             p.images = [ProductImage(url=urljoin(page_url, img))]
             p.evidence.append(_ev("images", [p.images[0].url], img, page_url, frag, "microdata"))

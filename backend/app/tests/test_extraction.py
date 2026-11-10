@@ -140,3 +140,35 @@ async def test_category_listing_with_cards_is_not_a_single_product():
     p = outcome.result.products[0]
     assert str(p.price.amount) == "40.50" and p.price.currency == "GBP" and p.availability == "InStock"
     assert p.product_url == "https://books.example/catalogue/category/item-0/index.html"
+
+
+def test_microdata_name_on_link_uses_text_not_href():
+    # Common shop markup: itemprop="name" on the product link, visible text truncated, full name in title=.
+    from app.services.extraction.structured import parse_microdata
+
+    html = """<div itemscope itemtype="https://schema.org/Product">
+      <a href="/shop/product/60" class="title" title="Asus VivoBook X441NA-GA190" itemprop="name">Asus VivoBook...</a>
+      <a href="/shop/product/60" itemprop="url">details</a>
+      <img itemprop="image" src="/img/60.png">
+      <span itemprop="price">$295.99</span><meta itemprop="priceCurrency" content="USD">
+    </div>
+    <div itemscope itemtype="https://schema.org/Product">
+      <a href="/shop/product/61" itemprop="name">Lenovo ThinkPad E14</a><span itemprop="price">$500</span>
+    </div>"""
+    products = parse_microdata(BeautifulSoup(html, "lxml"), "https://shop.example/laptops")
+    assert [p.name for p in products] == ["Asus VivoBook X441NA-GA190", "Lenovo ThinkPad E14"]
+    assert products[0].images[0].url == "https://shop.example/img/60.png"
+    assert products[0].price.amount == Decimal("295.99")
+
+
+def test_duplicate_issues_are_capped_per_product():
+    import uuid
+    from types import SimpleNamespace
+
+    from app.services.deduplication.dedupe import find_duplicates
+    from app.services.validation import validator
+
+    same = [SimpleNamespace(id=uuid.uuid4(), name="Widget Pro 3000", sku=None, gtin=None, brand=None,
+                            product_url=None, source_url=None) for _ in range(40)]
+    assert len(find_duplicates(same)) == 40 * 39 // 2  # every pair is a candidate ...
+    assert validator.MAX_DUPLICATE_ISSUES_PER_PRODUCT == 5  # ... but revalidate_business keeps 5 per product
